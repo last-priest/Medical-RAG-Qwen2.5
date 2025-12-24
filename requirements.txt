@@ -1,0 +1,23 @@
+# --- 基础环境与 Web 界面 ---
+streamlit               # 用于运行 Web 交互界面
+pandas                  # 用于处理 CSV 数据和评估结果
+openpyxl                # 必选：用于 pandas 将结果导出为 Excel (.xlsx)
+
+# --- LangChain 核心框架 (建议安装最新版) ---
+langchain               # 核心逻辑框架
+langchain-community     # 社区组件（CSVLoader, Chroma 等）
+langchain-core          # 基础接口（Prompt, Messages 等）
+langchain-openai        # 用于调用 SiliconFlow/OpenAI 接口
+langchain-huggingface   # 用于加载本地 Embedding 模型
+langchain-text-splitters # 专门用于文档切片的库
+
+# --- 向量数据库与 AI 模型支持 ---
+chromadb                # 本地向量数据库
+torch                   # 深度学习基础库（Embedding 模型运行必需）
+transformers            # HuggingFace 模型核心库
+sentence-transformers   # BGE-M3 等文本向量化模型必需
+huggingface_hub         # 访问 HuggingFace 资源
+
+# --- 辅助工具 ---
+modelscope              # 用于在国内高速下载模型
+tqdm                    # 进度条显示
