@@ -9,12 +9,18 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 from langchain_community.document_loaders import CSVLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_openai import ChatOpenAI
+# from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_huggingface import HuggingFaceEmbeddings
+
+# ✅ 新增以下导入
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from peft import PeftModel
+from langchain_huggingface import HuggingFacePipeline
 
 
 # ==========================================
@@ -24,10 +30,15 @@ from langchain_huggingface import HuggingFaceEmbeddings
 ST_TITLE = "🏥 智能医疗诊断助手 (基于 Qwen-2.5 & RAG)"
 
 # 你的 Key (注意保密)
-os.environ["OPENAI_API_KEY"] = "sk-okycixattvhctihwyrnokgeuyylxqxudrykublvsjywwvcdn" 
-os.environ["OPENAI_API_BASE"] = "https://api.siliconflow.cn/v1"
+# os.environ["OPENAI_API_KEY"] = "sk-okycixattvhctihwyrnokgeuyylxqxudrykublvsjywwvcdn" 
+# os.environ["OPENAI_API_BASE"] = "https://api.siliconflow.cn/v1"
 
-MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
+# MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
+
+
+# ✅ 指定本地基础模型和你的微调插件路径
+BASE_MODEL_PATH = "./models/Qwen/Qwen2.5-7B-Instruct" 
+LORA_ADAPTER_PATH = "./Qwen2.5-Medical-LoRA"
 
 # ==========================================
 # 核心逻辑
@@ -35,12 +46,12 @@ MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"
 @st.cache_resource
 def initialize_rag_system():
     # 1. 加载数据
-    if not os.path.exists("clean_medical_knowledge.csv"):
+    if not os.path.exists("./data/clean_medical_knowledge.csv"):
         return None, "请先运行 process_data.py 生成数据文件！"
 
     print("📄 正在加载医疗数据集...")
     loader = CSVLoader(
-        file_path="./clean_medical_knowledge.csv", 
+        file_path="./data/clean_medical_knowledge.csv", 
         encoding="utf-8",
         source_column="source"  # 这里指定了 metadata 读取哪一列
     )
@@ -68,14 +79,44 @@ def initialize_rag_system():
     retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
 
     # 5. 定义 LLM
-    llm = ChatOpenAI(
-        model_name=MODEL_NAME,
-        temperature=0.1, # 医疗场景温度要低，保持严谨
-        streaming=True
+    print("🧠 正在加载本地微调模型...")
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_PATH, trust_remote_code=True)
+    
+    # 加载基础模型
+    base_model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL_PATH,
+        torch_dtype=torch.float16,
+        device_map="auto",
+        trust_remote_code=True
     )
+    
+    # 挂载微调后的 LoRA 适配器
+    model = PeftModel.from_pretrained(base_model, LORA_ADAPTER_PATH)
+    model.eval() 
+
+    # 4. 构建推理 Pipeline (设置保智商参数)
+    stop_words = ["<|im_end|>", "<|im_start|>", "Assistant:", "User:"]
+
+    pipe = pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=512,
+        temperature=0.3,          # 调低随机性，医疗场景建议 0.2-0.4
+        top_p=0.8,
+        repetition_penalty=1.1,    # 降低重复惩罚（设为 1.2 太高会导致表情包）
+        do_sample=True,
+        # 核心：将停止词转换为 ID
+        eos_token_id=[tokenizer.convert_tokens_to_ids(word) for word in ["<|im_end|>", "<|endoftext|>"]],
+        pad_token_id=tokenizer.pad_token_id,
+        return_full_text=False 
+    )
+        
+    # 包装成 LangChain 可用的 llm 对象
+    llm = HuggingFacePipeline(pipeline=pipe)
 
     # 6. 定义 Prompt (改为医疗专家)
-    system_prompt = """
+    system_prompt = """<|im_start|>system
     你是一位经验丰富的【三甲医院主治医师】。请基于以下【参考资料】和【对话历史】回答患者的问题。
     
     要求：
@@ -84,7 +125,7 @@ def initialize_rag_system():
     3. 语气要专业、亲切、富有同理心。
 
     【参考资料】：
-    {context}
+    {context}<|im_end|>
     """
 
     prompt = ChatPromptTemplate.from_messages([
@@ -115,8 +156,8 @@ with st.sidebar:
         retriever, generation_chain, msg = initialize_rag_system()
     
     if retriever and generation_chain: # 判断两个都在
-        st.success("✅ 知识库挂载成功")
-        st.info(f"🧠 模型: {MODEL_NAME}")
+        st.success("✅ 微调模型 & 知识库加载成功")
+
     else:
         st.error(f"❌ 启动失败: {msg}")
         st.stop()
@@ -191,6 +232,9 @@ if prompt := st.chat_input("请描述您的症状或问题..."):
             })
 
             for chunk in stream:
+                # 物理过滤：如果 chunk 包含停止符，立即停止后续所有显示
+                if any(stop_word in chunk for stop_word in ["<|im_end|>", "Assistant:", "User:"]):
+                    break
                 full_response += chunk
                 # ▌ 是光标效果，模拟打字
                 response_placeholder.markdown(full_response + "▌")

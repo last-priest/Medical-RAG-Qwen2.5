@@ -7,7 +7,7 @@ QUESTION_FILE = './data/question.csv'
 ANSWER_FILE = './data/answer.csv'
 
 # 输出文件路径
-OUTPUT_FILE = './clean_medical_knowledge.csv'
+OUTPUT_FILE = './data/clean_medical_knowledge.csv'
 
 # 采样数量 (作业要求 > 5k，我们取 10k 比较稳)
 SAMPLE_SIZE = 10000
