@@ -79,6 +79,7 @@ python -m streamlit run exp.py
 
 ## 运行截图
 
-支持多轮对话：![image-20260105221138327](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20260105221138327.png)
+支持多轮对话：![image-20260105221138327](image-20260105221138327.png)
 
 拒绝不确定回答![image-20260105221248736](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20260105221248736.png)
+
