@@ -1,1 +1,0 @@
-# Medical-RAG-Qwen2.5
