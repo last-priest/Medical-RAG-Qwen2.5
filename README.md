@@ -83,13 +83,14 @@ python -m streamlit run exp.py
 
 ![image-20260106143908809](image/image-20260106143908809.png)
 
-![image-20260106143959713]image/image-20260106143959713.png)
+![image-20260106143959713](image/image-20260106143959713.png)
 
 ## 运行截图
 
 支持多轮对话：![image-20260105221138327](image/image-20260105221138327.png)
 
 拒绝不确定回答: ![image-20260105221248736](image/image-20260105221248736.png)
+
 
 
 
